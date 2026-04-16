@@ -58,15 +58,19 @@ inline size_t curl_streaming_cb(void* contents, size_t size, size_t nmemb, Strea
                 json chunk = json::parse(data);
                 if (chunk.contains("choices") && !chunk["choices"].empty()) {
                     auto& choice = chunk["choices"][0];
-                    if (choice.contains("delta") && choice["delta"].contains("content")) {
-                        auto& content = choice["delta"]["content"];
-                        if (!content.is_null()) {
-                            std::string token = content.get<std::string>();
-                            ctx->full_response += token;
-                            if (ctx->token_callback) {
-                                ctx->token_callback(token);
+                    if (choice.contains("delta")) {
+                        auto& delta = choice["delta"];
+                        // Extract content (standard field)
+                        if (delta.contains("content") && !delta["content"].is_null()) {
+                            std::string token = delta["content"].get<std::string>();
+                            if (!token.empty()) {
+                                ctx->full_response += token;
+                                if (ctx->token_callback) {
+                                    ctx->token_callback(token);
+                                }
                             }
                         }
+                        // Skip reasoning tokens (qwen3 thinking mode) — don't stream them
                     }
                 }
                 // Check for error in chunk
@@ -104,9 +108,9 @@ inline std::pair<std::string, double> query_llm_streaming(
         }
         request["messages"] = {{{"role", "user"}, {"content", prompt}}};
         request["temperature"] = 0.3;
-        request["max_tokens"] = 500;
+        request["max_tokens"] = 8192;
         request["stream"] = true;  // Enable streaming
-        request["stop"] = json::array({"\n\n", "Question:", "Context:"});
+        request["stop"] = json::array({"Question:", "Context:"});
     } catch (...) {
         curl_easy_cleanup(curl);
         return {"ERROR", 0};
@@ -183,9 +187,9 @@ inline std::pair<std::string, double> query_llm_once(const std::string& prompt) 
         }
         request["messages"] = {{{"role", "user"}, {"content", prompt}}};
         request["temperature"] = 0.3;
-        request["max_tokens"] = 500;
+        request["max_tokens"] = 8192;
         request["stream"] = false;
-        request["stop"] = json::array({"\n\n", "Question:", "Context:"});
+        request["stop"] = json::array({"Question:", "Context:"});
     } catch (...) {
         return {"ERROR", 0};
     }
