@@ -79,6 +79,16 @@ struct Config {
         int batch_size = 8;        // concurrent curl_multi batch size
     } scanner;
 
+    // v9.2: lightweight judge LLM for refinement loop
+    struct {
+        bool enabled = true;
+        string model = "gemma3:1b";
+        string url = "http://localhost:11434/v1/chat/completions";
+        int max_tokens = 50;
+        double temperature = 0.1;
+        int timeout_sec = 10;
+    } judge;
+
     // v9.3 Remora: segment search mode
     struct {
         string mode = "auto";            // "auto", "parallel" (kraken/leviathan), "sequential" (remora)
@@ -143,6 +153,14 @@ inline Config load_config(const string& path) {
                 cfg.scanner.temperature = j["scanner"].value("temperature", cfg.scanner.temperature);
                 cfg.scanner.timeout_sec = j["scanner"].value("timeout_sec", cfg.scanner.timeout_sec);
                 cfg.scanner.batch_size = j["scanner"].value("batch_size", cfg.scanner.batch_size);
+            }
+            if (j.contains("judge")) {
+                cfg.judge.enabled = j["judge"].value("enabled", cfg.judge.enabled);
+                cfg.judge.model = j["judge"].value("model", cfg.judge.model);
+                cfg.judge.url = j["judge"].value("url", cfg.judge.url);
+                cfg.judge.max_tokens = j["judge"].value("max_tokens", cfg.judge.max_tokens);
+                cfg.judge.temperature = j["judge"].value("temperature", cfg.judge.temperature);
+                cfg.judge.timeout_sec = j["judge"].value("timeout_sec", cfg.judge.timeout_sec);
             }
             if (j.contains("segments")) {
                 cfg.segments.mode = j["segments"].value("mode", cfg.segments.mode);

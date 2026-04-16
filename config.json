@@ -16,6 +16,14 @@
     "timeout_sec": 120,
     "max_retries": 2
   },
+  "judge": {
+    "enabled": true,
+    "model": "gemma3:1b",
+    "url": "http://localhost:11434/v1/chat/completions",
+    "max_tokens": 50,
+    "temperature": 0.1,
+    "timeout_sec": 10
+  },
   "reranker": {
     "enabled": false
   },

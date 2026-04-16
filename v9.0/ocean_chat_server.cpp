@@ -2091,6 +2091,11 @@ string judge_chunks(const string& question, const vector<Hit>& hits) {
         "If NO: Reply with exactly: REFINE: <better search keywords that would find the right answer>\n\n"
         "Reply with FOUND or REFINE only. No explanation.";
 
+    // v9.2: use lightweight judge LLM if enabled, otherwise fall back to main LLM
+    if (g_config.judge.enabled) {
+        auto [response, ms] = query_judge_llm(judge_prompt);
+        return response;
+    }
     auto [response, ms] = query_llm(judge_prompt);
     return response;
 }

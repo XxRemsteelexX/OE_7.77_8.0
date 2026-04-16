@@ -271,6 +271,67 @@ inline std::pair<std::string, double> query_llm_once(const std::string& prompt) 
     }
 }
 
+// v9.2: Judge LLM call — uses lightweight local model for refinement loop FOUND/REFINE decisions
+inline std::pair<std::string, double> query_judge_llm(const std::string& prompt) {
+    CURL* curl = curl_easy_init();
+    if (!curl) return {"ERROR", 0};
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    json request;
+    try {
+        request["model"] = g_config.judge.model;
+        request["messages"] = {{{"role", "user"}, {"content", prompt}}};
+        request["temperature"] = g_config.judge.temperature;
+        request["max_tokens"] = g_config.judge.max_tokens;
+        request["stream"] = false;
+        request["stop"] = json::array({"Question:", "Context:"});
+    } catch (...) {
+        curl_easy_cleanup(curl);
+        return {"ERROR", 0};
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, g_config.judge.url.c_str());
+
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    std::string request_body = request.dump();
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_body.c_str());
+
+    std::string response_string;
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)g_config.judge.timeout_sec);
+
+    CURLcode res = curl_easy_perform(curl);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    double elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
+
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        return {"FOUND", elapsed_ms};  // on error, don't block — treat as found
+    }
+
+    try {
+        json response = json::parse(response_string);
+        if (!response.contains("choices") || response["choices"].empty()) {
+            return {"FOUND", elapsed_ms};
+        }
+        auto& choice = response["choices"][0];
+        if (!choice.contains("message") || !choice["message"].contains("content") || choice["message"]["content"].is_null()) {
+            return {"FOUND", elapsed_ms};
+        }
+        return {choice["message"]["content"].get<std::string>(), elapsed_ms};
+    } catch (...) {
+        return {"FOUND", elapsed_ms};
+    }
+}
+
 // Scanner LLM call — uses scanner-specific model/URL/settings (not main LLM)
 // Returns YES/NO response string and elapsed_ms
 inline std::pair<std::string, double> query_scanner_llm(const std::string& prompt) {
